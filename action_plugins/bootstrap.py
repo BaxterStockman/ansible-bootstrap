@@ -26,6 +26,12 @@ from ansible.runner.return_data import ReturnData
 
 
 class tmp_keep_remote_files(object):
+    '''
+    Temporarily sets the value of C.DEFAULT_KEEP_REMOTE_FILES.  A hack to
+    prevent ansible.runner._execute_module from deleting the remote temporary
+    directory before we've had a chance to upload and run the 'passthrough'
+    module.
+    '''
     def __init__(self, tmp_value):
         self.tmp_value = tmp_value
 
@@ -95,16 +101,21 @@ class ActionModule(object):
         sources_options_map = utils.merge_hash(sources_complex_args_map, sources_module_args_map)
         passthru_options_map = utils.merge_hash(passthru_complex_args_map, passthru_module_args_hash)
 
-        # iterate over 'copy' files
+        passthru_options_keys = passthru_options_map.keys()
+        if len(passthru_options_keys) > 1:
+            raise errors.AnsibleError("Only one module can be run at a time; saw modules: %s"
+                                      % ', '.join(passthru_options_keys))
+
+        # Iterate over 'copy' files
         for src, options in sources_options_map.iteritems():
-            # construct remote filesystem path
+            # Construct remote filesystem path
             wanted_dest = options.get('dest', None)
 
             if wanted_dest is None:
                 if tmp is None:
                     tmp = self.runner._make_tmp_path(conn)
                 options['dest'] = tmp
-            # interpret relative paths as starting with the remote tmp
+            # Interpret relative paths as starting with the remote tmp
             # directory
             elif not wanted_dest.startswith('/'):
                 if tmp is None:
@@ -126,7 +137,7 @@ class ActionModule(object):
                 res = self._copy(conn, tmp, 'copy', copy_module_args, inject,
                                  complex_args=copy_complex_args)
 
-            # Fail here if libs weren't copied over correctly
+            # Fail here if files weren't copied over correctly
             if res is not None and not res.is_successful():
                 return res
 
@@ -154,4 +165,3 @@ class ActionModule(object):
                                                    inject=inject,
                                                    complex_args=passthru_complex_args,
                                                    **kwargs)
-
