@@ -22,6 +22,7 @@ import ansible.constants as C
 
 from ansible import utils
 from ansible import errors
+from ansible.callbacks import vvvv
 from ansible.runner.return_data import ReturnData
 
 
@@ -58,6 +59,23 @@ class ActionModule(object):
         return self.copy_handler.run(conn, tmp, 'copy', module_args, inject,
                                      complex_args=complex_args, **kwargs)
 
+    def _filter_recursive(self, operation, options):
+        mapped_options = {}
+
+        for key, value in options.iteritems():
+            if isinstance(value, dict):
+                mapped_options[key] = self._filter_recursive(operation, value)
+            elif isinstance(value, list):
+                mapped_options[key] = filter(operation, value)
+            else:
+                if operation(value):
+                    mapped_options[key] = value
+        vvvv("%s" % mapped_options)
+
+        return mapped_options
+
+
+
     def _partition_options(self, options=None, key=copy_module_key):
         if not options:
             return ({}, {})
@@ -84,6 +102,10 @@ class ActionModule(object):
 
 
     def run(self, conn, tmp, module_name, module_args, inject, complex_args=None, **kwargs):
+
+        # Filter out the omit token
+        complex_args = self._filter_recursive(lambda x: x != self.runner.omit_token, complex_args)
+
         (
         sources_complex_args_list,
         passthru_complex_args_map
