@@ -1,38 +1,55 @@
-Role Name
-=========
+ansible-bootstrap
+=================
 
-A brief description of the role goes here.
+An Ansible module for bootstrapping files onto remote systems.  If you have a
+role or module that requires, e.g., a Python module to exist on the remote
+system, but you don't want to install the library permanently, you can use this
+module to upload it to the remote system for the duration of the play.
 
-Requirements
-------------
-
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
-
-Role Variables
---------------
-
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
-
-Dependencies
-------------
-
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+(A word of caution: if you upload the file to anywhere but the play's remote
+temporary directory, it won't be cleaned up automatically)
 
 Example Playbook
 ----------------
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+`bootstrap` works in two stages:
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+- First, it uploads any files given as a list specified under the `sources`
+  key.  Each item in the list is passed through to the `copy` module, so any
+  valid `copy` option will work here, too.
+- After all `sources` items have been process, `bootstrap` attempts to load the
+  named module's `action_plugin`.  If that is not available, it executes the
+  module directly.
+
+`bootstrap` assumes that anything other than the `sources` list represents a
+task specification -- so, in the sample playbook below, `bootstrap` would
+attempt to find and run the `action_plugin` or module for `super_sweet_module`.
+It is an error to specify more than one such module.
+
+```yaml
+- hosts: servers
+  roles:
+    # Use this if you haven't copied the module into your ANSIBLE_LIBRARY
+    - role: bootstrap
+  tasks:
+    - name: bootstrap python libraries onto managed host
+      bootstrap:
+        sources:
+          - src: /path/to/one/library.py
+          - src: /path/to/another/library.py
+          - src=/path/to/something/else/entirely.py dest=/an/absolute/path
+        super_sweet_module:
+          key1: value1
+          key2: value2
+          key3: value3
+```
 
 License
 -------
 
-BSD
+GPLv3
 
 Author Information
 ------------------
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+[BaxterStockman](https://github.com/BaxterStockman)
