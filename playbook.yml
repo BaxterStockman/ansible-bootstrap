@@ -1,17 +1,20 @@
 ---
-# Sample playbook for nginx role
+# Sample playbook for bootstrap action_plugin
 - hosts: all
   roles:
-    - role: nginx
-      nginx_config_settings:
-        http:
-          server:
-            '/this.*':
-              location: "~"
-              root: '/usr/share/webapps/this'
-              index: 'index.htm'
-      nginx_file_mode: '0644'
-      nginx_service_enabled: no
-      nginx_service_state: stopped
-      become: true
+    - role: bootstrap
+  tasks:
+    - name: test bootstrap
+      bootstrap:
+        sources:
+          - src=/etc/samba/smb.conf dest={{ ansible_user_dir }}
+          - src: /etc/passwd
+          - src: /etc/hosts
+          - src: /etc/nginx/nginx.conf
+            dest: "{{ ansible_user_dir }}/nginx.conf"
+        command: >
+          echo "It's just like you called the 'command' module directly!"
+      register: echo_out
+    - debug:
+        var: echo_out
 
