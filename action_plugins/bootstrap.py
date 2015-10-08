@@ -70,7 +70,6 @@ class ActionModule(object):
             else:
                 if operation(value):
                     mapped_options[key] = value
-        vvvv("%s" % mapped_options)
 
         return mapped_options
 
@@ -100,12 +99,7 @@ class ActionModule(object):
 
         return sources_map
 
-
     def run(self, conn, tmp, module_name, module_args, inject, complex_args=None, **kwargs):
-
-        # Filter out the omit token
-        complex_args = self._filter_recursive(lambda x: x != self.runner.omit_token, complex_args)
-
         (
         sources_complex_args_list,
         passthru_complex_args_map
@@ -120,32 +114,45 @@ class ActionModule(object):
 
         sources_module_args_map = self._make_sources_map(sources_module_args_hash_list)
 
+        def not_omit_token(value):
+            return value != self.runner.omit_token
+
         sources_options_map = utils.merge_hash(sources_complex_args_map, sources_module_args_map)
         passthru_options_map = utils.merge_hash(passthru_complex_args_map, passthru_module_args_hash)
+
+        sources_options_map = self._filter_recursive(not_omit_token, sources_options_map)
+        passthru_options_map = self._filter_recursive(not_omit_token, passthru_options_map)
 
         passthru_options_keys = passthru_options_map.keys()
         if len(passthru_options_keys) > 1:
             raise errors.AnsibleError("Only one module can be run at a time; saw modules: %s"
                                       % ', '.join(passthru_options_keys))
 
+        # Register for tracking changes
+        changed = False
+
         # Iterate over 'copy' files
         for src, options in sources_options_map.iteritems():
             # Construct remote filesystem path
-            wanted_dest = options.get('dest', None)
+            dest = options.get('dest', None)
 
-            if wanted_dest is None:
+            if dest is None:
                 if tmp is None:
                     tmp = self.runner._make_tmp_path(conn)
-                options['dest'] = tmp
+                dest = tmp
             # Interpret relative paths as starting with the remote tmp
             # directory
-            elif not wanted_dest.startswith('/'):
+            elif not dest.startswith('/'):
                 if tmp is None:
                     tmp = self.runner._make_tmp_path(conn)
-                options['dest'] = os.path.join(tmp, wanted_dest)
+                os.path.join(tmp, dest)
 
-            copy_module_args = utils.serialize_args(sources_module_args_map.get(src, {}))
+            copy_module_args_hash = sources_module_args_map.get(src, {})
+            copy_module_args_hash.update(dict(dest=dest))
+            copy_module_args = utils.serialize_args(copy_module_args_hash)
             copy_complex_args = sources_complex_args_map.get(src, None)
+
+            vvvv(utils.jsonify(dict(copy_complex_args=copy_complex_args, copy_module_args=copy_module_args)))
 
             # Copy source to destination.
             #
@@ -159,8 +166,10 @@ class ActionModule(object):
                 res = self._copy(conn, tmp, 'copy', copy_module_args, inject,
                                  complex_args=copy_complex_args)
 
+            changed |= res.result.get('changed', False)
+
             # Fail here if files weren't copied over correctly
-            if res is not None and not res.is_successful():
+            if not res.is_successful():
                 return res
 
         for passthru_name, passthru_options in passthru_options_map.iteritems():
@@ -176,14 +185,19 @@ class ActionModule(object):
             # Instantiate the action_plugin for the wanted module
             passthru_handler = utils.plugins.action_loader.get(passthru_name, self.runner)
 
+            res = None
             if passthru_handler:
-                return passthru_handler.run(conn, tmp, passthru_name,
+                res = passthru_handler.run(conn, tmp, passthru_name,
                                             passthru_module_args, inject,
                                             complex_args=passthru_complex_args,
                                             **kwargs)
             else:
-                return self.runner._execute_module(conn, tmp, passthru_name,
+                res = self.runner._execute_module(conn, tmp, passthru_name,
                                                    passthru_module_args,
                                                    inject=inject,
                                                    complex_args=passthru_complex_args,
                                                    **kwargs)
+
+            changed |= res.result.get('changed', False)
+            res.result['changed'] = changed
+            return res

@@ -1,17 +1,18 @@
 ---
 # Sample playbook for bootstrap action_plugin
 - hosts: all
+  gather_facts: false
   roles:
     - role: bootstrap
   tasks:
     - name: test bootstrap
       bootstrap:
         sources:
-          - src=/etc/samba/smb.conf dest={{ ansible_user_dir }}
+          - src=/etc/samba/smb.conf dest={{ omit }}
           - src: /etc/passwd
           - src: /etc/hosts
           - src: /etc/nginx/nginx.conf
-            dest: "{{ ansible_user_dir }}/nginx.conf"
+            dest: /tmp/nginx.conf
         command: >
           echo "It's just like you called the 'command' module directly!"
       register: echo_out
