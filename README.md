@@ -54,7 +54,6 @@ them using one of Ansible's package management modules, or with `synchronize`.
 A further word of caution: if you upload the file to anywhere but the play's
 remote temporary directory, it won't be cleaned up automatically
 
-
 Bugs/Misfeatures
 ----------------
 

@@ -25,6 +25,21 @@ from ansible import errors
 from ansible.callbacks import vvvv
 from ansible.runner.return_data import ReturnData
 
+def intercept_return_data(func):
+    '''
+    Decorator that is intended for intercepting the return values from .run()
+    and injecting the "cleaned" module_name, module_args, etc., so that the
+    callback plugin can make it look like the passthrough module was called
+    directly.
+    '''
+    def interceptor(*args, **kwargs):
+        (return_data, module_name, module_args, complex_args) = func(*args, **kwargs)
+        cleaned_invocation = dict(module_name=module_name, module_args=module_args,
+                              module_complex_args=complex_args)
+        cleaned_invocation = dict(filter(lambda x: x[1] is not None, cleaned_invocation.iteritems()))
+        return_data.result.update(dict(cleaned_invocation=cleaned_invocation))
+        return return_data
+    return interceptor
 
 class tmp_keep_remote_files(object):
     '''
@@ -80,9 +95,9 @@ class ActionModule(object):
             return ({}, {})
 
         extracted = options.get(key, {})
-        rest = {k:v for k, v in options.iteritems() if not k == key}
+        return_datat = {k:v for k, v in options.iteritems() if not k == key}
 
-        return extracted, rest
+        return extracted, return_datat
 
     def _make_sources_map(self, sources_list=None):
         sources_map = {}
@@ -99,13 +114,20 @@ class ActionModule(object):
 
         return sources_map
 
+
+    @intercept_return_data
     def run(self, conn, tmp, module_name, module_args, inject, complex_args=None, **kwargs):
+        def not_omit_token(value):
+            return value != self.runner.omit_token
+
         (
         sources_complex_args_list,
         passthru_complex_args_map
         ) = self._partition_options(complex_args)
 
         sources_complex_args_map = self._make_sources_map(sources_complex_args_list)
+        sources_complex_args_map = self._filter_recursive(not_omit_token, sources_complex_args_map)
+        passthru_complex_args_map = self._filter_recursive(not_omit_token, passthru_complex_args_map)
 
         (
         sources_module_args_hash_list,
@@ -113,23 +135,16 @@ class ActionModule(object):
         ) = self._partition_options(utils.parse_kv(module_args))
 
         sources_module_args_map = self._make_sources_map(sources_module_args_hash_list)
-
-        def not_omit_token(value):
-            return value != self.runner.omit_token
+        sources_module_args_map = self._filter_recursive(not_omit_token, sources_module_args_map)
+        passthru_module_args_hash = self._filter_recursive(not_omit_token, passthru_module_args_hash)
 
         sources_options_map = utils.merge_hash(sources_complex_args_map, sources_module_args_map)
         passthru_options_map = utils.merge_hash(passthru_complex_args_map, passthru_module_args_hash)
-
-        sources_options_map = self._filter_recursive(not_omit_token, sources_options_map)
-        passthru_options_map = self._filter_recursive(not_omit_token, passthru_options_map)
 
         passthru_options_keys = passthru_options_map.keys()
         if len(passthru_options_keys) > 1:
             raise errors.AnsibleError("Only one module can be run at a time; saw modules: %s"
                                       % ', '.join(passthru_options_keys))
-
-        # Register for tracking changes
-        changed = False
 
         # Iterate over 'copy' files
         for src, options in sources_options_map.iteritems():
@@ -152,8 +167,6 @@ class ActionModule(object):
             copy_module_args = utils.serialize_args(copy_module_args_hash)
             copy_complex_args = sources_complex_args_map.get(src, None)
 
-            vvvv(utils.jsonify(dict(copy_complex_args=copy_complex_args, copy_module_args=copy_module_args)))
-
             # Copy source to destination.
             #
             # XXX because the 'copy' action_plugin doesn't pass through
@@ -161,19 +174,17 @@ class ActionModule(object):
             # adjustment to C.DEFAULT_KEEP_REMOTE_FILES.  The 'as' clause is
             # necessary in order to affect C.DEFAULT_KEEP_REMOTE_FILES in the
             # scope of ansible.runner.
-            res = None
+            return_data = None
             with tmp_keep_remote_files(True) as C.DEFAULT_KEEP_REMOTE_FILES:
-                res = self._copy(conn, tmp, 'copy', copy_module_args, inject,
+                return_data = self._copy(conn, tmp, 'copy', copy_module_args, inject,
                                  complex_args=copy_complex_args)
 
-            changed |= res.result.get('changed', False)
-
             # Fail here if files weren't copied over correctly
-            if not res.is_successful():
-                return res
+            if not return_data.is_successful():
+                return return_data, 'copy', copy_module_args, copy_complex_args
 
-        for passthru_name, passthru_options in passthru_options_map.iteritems():
-            passthru_complex_args = passthru_complex_args_map.get(passthru_name, None)
+        for passthru_module_name, passthru_options in passthru_options_map.iteritems():
+            passthru_complex_args = passthru_options_map.get(passthru_module_name, None)
             passthru_module_args = utils.serialize_args(passthru_module_args_hash)
 
             # Handle things like 'command: do_something'
@@ -183,21 +194,19 @@ class ActionModule(object):
                 passthru_complex_args = None
 
             # Instantiate the action_plugin for the wanted module
-            passthru_handler = utils.plugins.action_loader.get(passthru_name, self.runner)
+            passthru_handler = utils.plugins.action_loader.get(passthru_module_name, self.runner)
 
-            res = None
+            return_data = None
             if passthru_handler:
-                res = passthru_handler.run(conn, tmp, passthru_name,
+                return_data = passthru_handler.run(conn, tmp, passthru_module_name,
                                             passthru_module_args, inject,
                                             complex_args=passthru_complex_args,
                                             **kwargs)
             else:
-                res = self.runner._execute_module(conn, tmp, passthru_name,
+                return_data = self.runner._execute_module(conn, tmp, passthru_module_name,
                                                    passthru_module_args,
                                                    inject=inject,
                                                    complex_args=passthru_complex_args,
                                                    **kwargs)
 
-            changed |= res.result.get('changed', False)
-            res.result['changed'] = changed
-            return res
+            return return_data, passthru_module_name, passthru_module_args, passthru_complex_args
