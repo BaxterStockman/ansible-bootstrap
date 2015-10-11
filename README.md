@@ -1,6 +1,8 @@
 ansible-bootstrap
 =================
 
+[![Build Status](https://travis-ci.org/BaxterStockman/ansible-bootstrap.svg)](https://travis-ci.org/BaxterStockman/ansible-bootstrap)
+
 An Ansible module for bootstrapping files onto remote systems.  If you have a
 role or module that requires, e.g., a Python module to exist on the remote
 system, but you don't want to install the library permanently, you can use this
