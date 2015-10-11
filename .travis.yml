@@ -24,10 +24,10 @@ script:
   # Run the role/playbook again, checking for idempotence
   - >
     if ansible-playbook -l travis tests/$SITE | grep -q "changed=0.*failed=0"; then
-		echo "Idempotence test: pass"
-		exit 0
-	else
-    	echo "Idempotence test: fail"
-	 	exit 1
-	fi
+        echo "Idempotence test: pass"
+        exit 0
+    else
+        echo "Idempotence test: fail"
+        exit 1
+    fi
 
