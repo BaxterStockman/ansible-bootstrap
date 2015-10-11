@@ -8,13 +8,12 @@
     - name: test bootstrap
       bootstrap:
         sources:
-          - src=/etc/samba/smb.conf dest={{ omit }}
-          - src: /etc/passwd
+          - src=/etc/passwd dest={{ omit }}
           - src: /etc/hosts
-          - src: /etc/nginx/nginx.conf
-            dest: /tmp/nginx.conf
-        command: >
-          echo "It's just like you called the 'command' module directly!"
-      register: echo_out
+        copy:
+          content: "It's just like calling copy directly!"
+          dest: /tmp/motd
+      register: motd_out
     - debug:
-        var: echo_out
+        var: motd_out
+      changed_when: no

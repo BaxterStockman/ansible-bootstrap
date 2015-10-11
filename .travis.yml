@@ -16,14 +16,14 @@ install:
 
 script:
   # Check syntax
-  - "ansible-playbook tests/$SITE --syntax-check"
+  - "ansible-playbook -l travis tests/$SITE --syntax-check"
 
   # Run the role/playbook with ansible-playbook
-  - "ansible-playbook tests/$SITE"
+  - "ansible-playbook -l travis tests/$SITE"
 
   # Run the role/playbook again, checking for idempotence
   - >
-    if ansible-playbook tests/$SITE | grep -q "changed=0.*failed=0"; then
+    if ansible-playbook -l travis tests/$SITE | grep -q "changed=0.*failed=0"; then
 		echo "Idempotence test: pass"
 		exit 0
 	else
