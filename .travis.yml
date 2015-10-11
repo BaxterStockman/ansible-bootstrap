@@ -4,30 +4,26 @@ language: python
 python: "2.7"
 
 env:
-  - SITE=playbook.yml
-
-before_install:
-  - sudo apt-get update -qq
-  - sudo apt-get install -y curl
+    - SITE=playbook.yml
 
 install:
-  # Install ansible
-  - pip install ansible
+    # Install ansible
+    - pip install ansible
 
 script:
-  # Check syntax
-  - "ansible-playbook -l travis tests/$SITE --syntax-check"
+    # Check syntax
+    - "ansible-playbook -l travis test/$SITE --syntax-check"
 
-  # Run the role/playbook with ansible-playbook
-  - "ansible-playbook -l travis tests/$SITE"
+    # Run the role/playbook with ansible-playbook
+    - "ansible-playbook -l travis test/$SITE"
 
-  # Run the role/playbook again, checking for idempotence
-  - >
-    if ansible-playbook -l travis tests/$SITE | grep -q "changed=0.*failed=0"; then
-        echo "Idempotence test: pass"
-        exit 0
-    else
-        echo "Idempotence test: fail"
-        exit 1
-    fi
+    # Run the role/playbook again, checking for idempotence
+    - >
+        if ansible-playbook -l travis test/$SITE | grep -q "changed=0.*failed=0"; then
+                echo "Idempotence test: pass"
+                exit 0
+        else
+                echo "Idempotence test: fail"
+                exit 1
+        fi
 
