@@ -4,7 +4,7 @@ language: python
 python: "2.7"
 
 env:
-    - SITE=test.yml
+    - SITE=playbook.yml
 
 install:
     # Install ansible
