@@ -1,0 +1,33 @@
+
+---
+language: python
+python: "2.7"
+
+env:
+  - SITE=test.yml
+
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -y curl
+
+install:
+  # Install ansible
+  - pip install ansible
+
+script:
+  # Check syntax
+  - "ansible-playbook tests/$SITE --syntax-check"
+
+  # Run the role/playbook with ansible-playbook
+  - "ansible-playbook tests/$SITE"
+
+  # Run the role/playbook again, checking for idempotence
+  - >
+    if ansible-playbook tests/$SITE | grep -q "changed=0.*failed=0"; then
+		echo "Idempotence test: pass"
+		exit 0
+	else
+    	echo "Idempotence test: fail"
+	 	exit 1
+	fi
+
