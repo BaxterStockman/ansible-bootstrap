@@ -20,7 +20,7 @@ script:
     - "ansible-playbook -l travis test/$SITE --syntax-check"
 
     # Run the role/playbook with ansible-playbook
-    - "ansible-playbook -vvvv :w-l travis test/$SITE"
+    - "ansible-playbook -vvvv -l travis test/$SITE"
 
     # Run the role/playbook again, checking for idempotence
     - >
