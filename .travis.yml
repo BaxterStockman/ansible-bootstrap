@@ -20,11 +20,11 @@ script:
     - "ansible-playbook -l travis test/$SITE --syntax-check"
 
     # Run the role/playbook with ansible-playbook
-    - "ansible-playbook -l travis test/$SITE"
+    - "ansible-playbook -vvvv :w-l travis test/$SITE"
 
     # Run the role/playbook again, checking for idempotence
     - >
-        if ansible-playbook -l travis test/$SITE | grep -q "changed=0.*failed=0"; then
+        if ansible-playbook -vvvv -l travis test/$SITE | grep -q "changed=0.*failed=0"; then
                 echo "Idempotence test: pass"
                 exit 0
         else
