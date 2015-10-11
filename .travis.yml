@@ -11,6 +11,7 @@ install:
     - pip install ansible
 
 before_script:
+    # So that role name 'bootstap' works
     - ln -sf ansible-bootstrap ../bootstrap
 
 script:
