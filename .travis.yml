@@ -12,23 +12,25 @@ install:
     - pip install ansible
 
 before_script:
-    # So that role name 'bootstap' works
-    - ln -sf ansible-bootstrap ../bootstrap
+    - >
+        bash -c 'basename="${PWD##*/}" ; \
+            role_name="${basename##*-}" ; \
+            ln -sf "$basename" ../"$role_name"'
 
 script:
     # Check syntax
-    - "ansible-playbook -l travis test/$SITE --syntax-check"
+    - "ansible-playbook test/$SITE --syntax-check"
 
     # Run the role/playbook with ansible-playbook
-    - "ansible-playbook -vvvv -l travis test/$SITE"
+    - "ansible-playbook test/$SITE"
 
     # Run the role/playbook again, checking for idempotence
     - >
-        if ansible-playbook -vvvv -l travis test/$SITE | grep -q "changed=0.*failed=0"; then
-                echo "Idempotence test: pass"
-                exit 0
+        if ansible-playbook test/$SITE | grep -q "changed=0.*failed=0"; then
+            echo "Idempotence test: pass"
+            exit 0
         else
-                echo "Idempotence test: fail"
-                exit 1
+            echo "Idempotence test: fail"
+            exit 1
         fi
 
