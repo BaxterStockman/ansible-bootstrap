@@ -88,16 +88,14 @@ class ActionModule(object):
 
         return mapped_options
 
-
-
     def _partition_options(self, options=None, key=copy_module_key):
         if not options:
             return ({}, {})
 
         extracted = options.get(key, {})
-        return_datat = {k:v for k, v in options.iteritems() if not k == key}
+        return_data = {k:v for k, v in options.iteritems() if not k == key}
 
-        return extracted, return_datat
+        return extracted, return_data
 
     def _make_sources_map(self, sources_list=None):
         sources_map = {}
@@ -113,7 +111,6 @@ class ActionModule(object):
                 raise errors.AnsibleError("All sources must define src=path")
 
         return sources_map
-
 
     @intercept_return_data
     def run(self, conn, tmp, module_name, module_args, inject, complex_args=None, **kwargs):
@@ -140,6 +137,12 @@ class ActionModule(object):
 
         sources_options_map = utils.merge_hash(sources_complex_args_map, sources_module_args_map)
         passthru_options_map = utils.merge_hash(passthru_complex_args_map, passthru_module_args_hash)
+
+        skip_action_plugin = utils.boolean(passthru_options_map.get('skip_action_plugin', False))
+        try:
+            del(passthru_options_map['skip_action_plugin'])
+        except KeyError:
+            pass
 
         passthru_options_keys = passthru_options_map.keys()
         if len(passthru_options_keys) > 1:
@@ -194,19 +197,25 @@ class ActionModule(object):
                 passthru_complex_args = None
 
             # Instantiate the action_plugin for the wanted module
-            passthru_handler = utils.plugins.action_loader.get(passthru_module_name, self.runner)
-
             return_data = None
-            if passthru_handler:
-                return_data = passthru_handler.run(conn, tmp, passthru_module_name,
-                                            passthru_module_args, inject,
-                                            complex_args=passthru_complex_args,
-                                            **kwargs)
+            if not skip_action_plugin:
+                passthru_handler = utils.plugins.action_loader.get(passthru_module_name, self.runner)
+                if passthru_handler:
+                    try:
+                        return_data = passthru_handler.run(conn, tmp, passthru_module_name,
+                                                    passthru_module_args, inject,
+                                                    complex_args=passthru_complex_args,
+                                                    **kwargs)
+                    except Exception as err:
+                        return_data = ReturnData(conn=conn, result=dict(failed=True, msg="Encountered error in %s module: %s" %
+                                                             (passthru_module_name, str(err))))
+
             else:
-                return_data = self.runner._execute_module(conn, tmp, passthru_module_name,
-                                                   passthru_module_args,
-                                                   inject=inject,
-                                                   complex_args=passthru_complex_args,
-                                                   **kwargs)
+                try:
+                    return_data = self.runner._execute_module(conn, tmp, passthru_module_name, passthru_module_args,
+                                                              inject=inject, complex_args=passthru_complex_args, **kwargs)
+                except Exception as err:
+                    return_data = ReturnData(conn=conn, result=dict(failed=True, msg="Encountered error in %s module: %s" %
+                                                            (passthru_module_name, str(err))))
 
             return return_data, passthru_module_name, passthru_module_args, passthru_complex_args
